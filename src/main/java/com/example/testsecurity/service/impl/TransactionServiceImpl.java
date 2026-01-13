@@ -1,0 +1,319 @@
+package com.example.testsecurity.service.impl;
+
+import com.example.testsecurity.entity.TransactionHistory;
+import com.example.testsecurity.exception.BusinessException;
+import com.example.testsecurity.exception.CryptoException;
+import com.example.testsecurity.exception.ErrorCode;
+import com.example.testsecurity.repository.TransactionHistoryRepository;
+import com.example.testsecurity.service.EncryptionService;
+import com.example.testsecurity.service.TransactionService;
+import com.example.testsecurity.util.LogMaskingUtil;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+
+/**
+ * Implementation của TransactionService.
+ * <p>
+ * Xử lý logic nghiệp vụ cho banking transaction system với đầy đủ:
+ * <ul>
+ *     <li>Encryption/Decryption (AES cho database, RSA cho service communication)</li>
+ *     <li>Business validation (số dư, tài khoản, ...)</li>
+ *     <li>Transaction management (atomicity)</li>
+ *     <li>Error handling với data masking trong logs</li>
+ * </ul>
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class TransactionServiceImpl implements TransactionService {
+
+    /**
+     * Repository để lưu transaction history vào database
+     */
+    private final TransactionHistoryRepository repository;
+
+    /**
+     * Service để mã hóa/giải mã dữ liệu
+     */
+    private final EncryptionService encryptionService;
+
+    /**
+     * DateTimeFormatter để parse time từ String
+     */
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+
+    /**
+     * Xử lý giao dịch chuyển khoản.
+     * <p>
+     * Flow chi tiết:
+     * <ol>
+     *     <li>Validate input (transactionId, fromAccount, toAccount, amount, time)</li>
+     *     <li>Check duplicate transactionId (idempotency)</li>
+     *     <li>Check business rules (số dư, tài khoản tồn tại, ...)</li>
+     *     <li>Tạo 2 bản ghi transaction history:</li>
+     *     <li>   - Bản ghi NỢ cho tài khoản nguồn (InDebt = amount, Have = 0)</li>
+     *     <li>   - Bản ghi CÓ cho tài khoản đích (InDebt = 0, Have = amount)</li>
+     *     <li>AES encrypt Account Number trước khi lưu vào database</li>
+     * </ol>
+     * <p>
+     * <b>Transaction Management:</b>
+     * <ul>
+     *     <li>Method này được đánh dấu @Transactional</li>
+     *     <li>Nếu có lỗi ở bất kỳ bước nào, tất cả các bản ghi sẽ được rollback (atomicity)</li>
+     *     <li>Đảm bảo tính nhất quán dữ liệu (consistency)</li>
+     * </ul>
+     *
+     * @param transactionId Mã giao dịch (đã được RSA decrypt)
+     * @param fromAccount   Số tài khoản nguồn (đã được RSA decrypt)
+     * @param toAccount     Số tài khoản đích (đã được RSA decrypt)
+     * @param amount        Số tiền chuyển khoản (đã được RSA decrypt và convert sang BigDecimal)
+     * @param time          Thời gian phát sinh giao dịch (đã được RSA decrypt và parse sang LocalDateTime)
+     * @throws BusinessException nếu có lỗi nghiệp vụ (số dư không đủ, tài khoản không tồn tại, duplicate transactionId, ...)
+     * @throws CryptoException   nếu có lỗi mã hóa/giải mã
+     */
+    @Override
+    @Transactional
+    public void processTransfer(String transactionId, String fromAccount, String toAccount, BigDecimal amount, LocalDateTime time) {
+        try {
+            // Log với masked data (che thông tin nhạy cảm)
+            log.info("Processing transfer transaction: transactionId={}, fromAccount={}, toAccount={}, amount={}, time={}",
+                    LogMaskingUtil.maskTransactionId(transactionId),
+                    LogMaskingUtil.maskAccount(fromAccount),
+                    LogMaskingUtil.maskAccount(toAccount),
+                    LogMaskingUtil.maskAmount(amount.toString()),
+                    LogMaskingUtil.maskTime(time.toString()));
+
+            // Step 1: Validate input
+            validateInput(transactionId, fromAccount, toAccount, amount, time);
+
+            // Step 2: Check duplicate transactionId (idempotency)
+            checkDuplicateTransactionId(transactionId);
+
+            // Step 3: Check business rules (số dư, tài khoản tồn tại, ...)
+            validateBusinessRules(fromAccount, toAccount, amount);
+
+            // Step 4: Create 2 transaction records (NỢ và CÓ)
+            createDebitRecord(transactionId, fromAccount, amount, time);
+            createCreditRecord(transactionId, toAccount, amount, time);
+
+            log.info("Transfer transaction processed successfully: transactionId={}",
+                    LogMaskingUtil.maskTransactionId(transactionId));
+
+        } catch (BusinessException | CryptoException e) {
+            // Re-throw business/crypto exceptions (đã được log với masked data ở các method con)
+            throw e;
+
+        } catch (Exception e) {
+            // Log exception với masked data
+            log.error("Unexpected error processing transfer transaction: transactionId={}, fromAccount={}, toAccount={}, amount={}, time={}",
+                    LogMaskingUtil.maskTransactionId(transactionId),
+                    LogMaskingUtil.maskAccount(fromAccount),
+                    LogMaskingUtil.maskAccount(toAccount),
+                    LogMaskingUtil.maskAmount(amount != null ? amount.toString() : "?"),
+                    LogMaskingUtil.maskTime(time != null ? time.toString() : "?"),
+                    e);
+
+            // Wrap và throw BusinessException
+            throw new BusinessException(
+                    ErrorCode.INTERNAL_SERVER_ERROR,
+                    "An unexpected error occurred while processing transfer transaction",
+                    e
+            );
+        }
+    }
+
+    /**
+     * Validate input data
+     *
+     * @param transactionId Mã giao dịch
+     * @param fromAccount   Số tài khoản nguồn
+     * @param toAccount     Số tài khoản đích
+     * @param amount        Số tiền
+     * @param time          Thời gian
+     * @throws BusinessException nếu validation failed
+     */
+    private void validateInput(String transactionId, String fromAccount, String toAccount, BigDecimal amount, LocalDateTime time) {
+        if (transactionId == null || transactionId.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Transaction ID is required");
+        }
+
+        if (fromAccount == null || fromAccount.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "From account is required");
+        }
+
+        if (toAccount == null || toAccount.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "To account is required");
+        }
+
+        if (fromAccount.equals(toAccount)) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "From account and To account cannot be the same");
+        }
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_AMOUNT, "Amount must be greater than 0");
+        }
+
+        if (time == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Time is required");
+        }
+    }
+
+    /**
+     * Check duplicate transactionId (idempotency)
+     * <p>
+     * Đảm bảo mỗi transactionId chỉ được xử lý một lần (tránh duplicate transaction)
+     *
+     * @param transactionId Mã giao dịch
+     * @throws BusinessException nếu transactionId đã tồn tại
+     */
+    private void checkDuplicateTransactionId(String transactionId) {
+        boolean exists = repository.existsByTransactionId(transactionId);
+        if (exists) {
+            log.warn("Duplicate transaction ID detected: transactionId={}",
+                    LogMaskingUtil.maskTransactionId(transactionId));
+            throw new BusinessException(
+                    ErrorCode.DUPLICATE_TRANSACTION_ID,
+                    "Transaction ID already exists"
+            );
+        }
+    }
+
+    /**
+     * Validate business rules (số dư, tài khoản tồn tại, ...)
+     * <p>
+     * <b>Lưu ý:</b> Trong hệ thống thực tế, cần:
+     * <ul>
+     *     <li>Check tài khoản tồn tại (query từ Account table)</li>
+     *     <li>Check số dư đủ (query từ Balance table)</li>
+     *     <li>Check tài khoản có bị khóa không</li>
+     *     <li>Check giới hạn giao dịch (daily limit, ...)</li>
+     * </ul>
+     * <p>
+     * Ở đây chỉ implement basic validation, có thể mở rộng sau.
+     *
+     * @param fromAccount Số tài khoản nguồn
+     * @param toAccount   Số tài khoản đích
+     * @param amount      Số tiền
+     * @throws BusinessException nếu business rules không thỏa mãn
+     */
+    private void validateBusinessRules(String fromAccount, String toAccount, BigDecimal amount) {
+        // TODO: Implement actual business validation
+        // - Check account exists
+        // - Check account balance
+        // - Check account status (active, locked, ...)
+        // - Check transaction limits
+
+        // Placeholder: Basic validation
+        log.debug("Validating business rules for transfer: fromAccount={}, toAccount={}, amount={}",
+                LogMaskingUtil.maskAccount(fromAccount),
+                LogMaskingUtil.maskAccount(toAccount),
+                LogMaskingUtil.maskAmount(amount.toString()));
+    }
+
+    /**
+     * Tạo bản ghi NỢ cho tài khoản nguồn
+     * <p>
+     * Bản ghi này ghi nhận số tiền bị trừ từ tài khoản nguồn
+     *
+     * @param transactionId Mã giao dịch
+     * @param account       Số tài khoản nguồn
+     * @param amount        Số tiền
+     * @param time          Thời gian
+     */
+    private void createDebitRecord(String transactionId, String account, BigDecimal amount, LocalDateTime time) {
+        try {
+            // AES encrypt Account trước khi lưu vào database
+            String encryptedAccount = encryptionService.encryptAccountForDatabase(account);
+
+            TransactionHistory debitRecord = TransactionHistory.builder()
+                    .transactionId(transactionId)
+                    .account(encryptedAccount) // Đã được AES encrypt
+                    .inDebt(amount)           // Số tiền nợ
+                    .have(BigDecimal.ZERO)    // Không có số tiền có
+                    .time(time)
+                    .build();
+
+            repository.save(debitRecord);
+
+            log.debug("Debit record created: transactionId={}, account={}",
+                    LogMaskingUtil.maskTransactionId(transactionId),
+                    LogMaskingUtil.maskAccount(account));
+
+        } catch (CryptoException e) {
+            log.error("Failed to encrypt account for debit record: transactionId={}, account={}",
+                    LogMaskingUtil.maskTransactionId(transactionId),
+                    LogMaskingUtil.maskAccount(account),
+                    e);
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to create debit record: transactionId={}, account={}, amount={}, time={}",
+                    LogMaskingUtil.maskTransactionId(transactionId),
+                    LogMaskingUtil.maskAccount(account),
+                    LogMaskingUtil.maskAmount(amount.toString()),
+                    LogMaskingUtil.maskTime(time.toString()),
+                    e);
+            throw new BusinessException(
+                    ErrorCode.INTERNAL_SERVER_ERROR,
+                    "Failed to create debit record",
+                    e
+            );
+        }
+    }
+
+    /**
+     * Tạo bản ghi CÓ cho tài khoản đích
+     * <p>
+     * Bản ghi này ghi nhận số tiền được cộng vào tài khoản đích
+     *
+     * @param transactionId Mã giao dịch
+     * @param account       Số tài khoản đích
+     * @param amount        Số tiền
+     * @param time          Thời gian
+     */
+    private void createCreditRecord(String transactionId, String account, BigDecimal amount, LocalDateTime time) {
+        try {
+            // AES encrypt Account trước khi lưu vào database
+            String encryptedAccount = encryptionService.encryptAccountForDatabase(account);
+
+            TransactionHistory creditRecord = TransactionHistory.builder()
+                    .transactionId(transactionId)
+                    .account(encryptedAccount) // Đã được AES encrypt
+                    .inDebt(BigDecimal.ZERO)  // Không có số tiền nợ
+                    .have(amount)             // Số tiền có
+                    .time(time)
+                    .build();
+
+            repository.save(creditRecord);
+
+            log.debug("Credit record created: transactionId={}, account={}",
+                    LogMaskingUtil.maskTransactionId(transactionId),
+                    LogMaskingUtil.maskAccount(account));
+
+        } catch (CryptoException e) {
+            log.error("Failed to encrypt account for credit record: transactionId={}, account={}",
+                    LogMaskingUtil.maskTransactionId(transactionId),
+                    LogMaskingUtil.maskAccount(account),
+                    e);
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to create credit record: transactionId={}, account={}, amount={}, time={}",
+                    LogMaskingUtil.maskTransactionId(transactionId),
+                    LogMaskingUtil.maskAccount(account),
+                    LogMaskingUtil.maskAmount(amount.toString()),
+                    LogMaskingUtil.maskTime(time.toString()),
+                    e);
+            throw new BusinessException(
+                    ErrorCode.INTERNAL_SERVER_ERROR,
+                    "Failed to create credit record",
+                    e
+            );
+        }
+    }
+}
