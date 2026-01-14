@@ -1,5 +1,6 @@
 package com.example.testsecurity.service;
 
+import com.example.testsecurity.constants.EncryptionConstants;
 import com.example.testsecurity.exception.CryptoException;
 import com.example.testsecurity.util.AesUtil;
 import com.example.testsecurity.util.RsaUtil;
@@ -65,10 +66,10 @@ public class EncryptionService {
         // Load AES key (bắt buộc)
         try {
             this.aesKey = AesUtil.keyFromString(aesKeyBase64);
-            log.info("AES key loaded successfully from config");
+            log.info(EncryptionConstants.LOG_AES_KEY_LOADED);
         } catch (IllegalArgumentException e) {
             log.error("Failed to load AES key from config: invalid Base64 format", e);
-            throw new CryptoException("Invalid AES key format in config", e);
+            throw new CryptoException(EncryptionConstants.ERR_INVALID_AES_KEY_FORMAT, e);
         }
 
         // Load RSA keys (optional - nếu không có thì generate tạm)
@@ -81,7 +82,7 @@ public class EncryptionService {
                 // Thử parse RSA keys từ config
                 tempPublicKey = parseRSAPublicKey(rsaPublicKeyBase64);
                 tempPrivateKey = parseRSAPrivateKey(rsaPrivateKeyBase64);
-                log.info("RSA keys loaded successfully from config");
+                log.info(EncryptionConstants.LOG_RSA_KEYS_LOADED);
             } catch (CryptoException e) {
                 log.error("Failed to parse RSA keys from config, will generate temporary keys", e);
                 // Fallback: generate temporary keys
@@ -91,8 +92,7 @@ public class EncryptionService {
             }
         } else {
             // Generate temporary RSA keys
-            log.warn("RSA keys not found in config, generating temporary keys. " +
-                    "Run RsaKeyGenerator to generate real keys for production!");
+            log.warn(EncryptionConstants.LOG_RSA_KEYS_NOT_FOUND);
             KeyPair tempKeyPair = generateTemporaryRSAKeys();
             tempPublicKey = tempKeyPair.getPublic();
             tempPrivateKey = tempKeyPair.getPrivate();
@@ -101,7 +101,7 @@ public class EncryptionService {
         this.rsaPublicKey = tempPublicKey;
         this.rsaPrivateKey = tempPrivateKey;
 
-        log.info("EncryptionService initialized successfully");
+        log.info(EncryptionConstants.LOG_ENCRYPTION_SERVICE_INITIALIZED);
     }
 
     // ============ AES Methods (for database encryption) ============
@@ -117,16 +117,16 @@ public class EncryptionService {
      */
     public String encryptAccountForDatabase(String account) {
         try {
-            log.debug("Encrypting account for database storage (length: {})", account != null ? account.length() : 0);
+            log.debug(EncryptionConstants.LOG_ENCRYPTING_ACCOUNT_FOR_DB, account != null ? account.length() : 0);
             String encrypted = AesUtil.encrypt(account, aesKey);
-            log.debug("Account encrypted successfully for database");
+            log.debug(EncryptionConstants.LOG_ACCOUNT_ENCRYPTED_FOR_DB);
             return encrypted;
         } catch (CryptoException e) {
             log.error("AES encryption failed for account: {}", e.getMessage(), e);
             throw e;
         } catch (IllegalArgumentException e) {
             log.error("AES encryption failed: invalid account format", e);
-            throw new CryptoException("Invalid account format for AES encryption", e);
+            throw new CryptoException(EncryptionConstants.ERR_INVALID_ACCOUNT_FORMAT_AES, e);
         }
     }
 
@@ -141,16 +141,16 @@ public class EncryptionService {
      */
     public String decryptAccountFromDatabase(String encryptedAccount) {
         try {
-            log.debug("Decrypting account from database (cipherText length: {})", encryptedAccount != null ? encryptedAccount.length() : 0);
+            log.debug(EncryptionConstants.LOG_DECRYPTING_ACCOUNT_FROM_DB, encryptedAccount != null ? encryptedAccount.length() : 0);
             String decrypted = AesUtil.decrypt(encryptedAccount, aesKey);
-            log.debug("Account decrypted successfully from database");
+            log.debug(EncryptionConstants.LOG_ACCOUNT_DECRYPTED_FROM_DB);
             return decrypted;
         } catch (CryptoException e) {
             log.error("AES decryption failed for account: {}", e.getMessage(), e);
             throw e;
         } catch (IllegalArgumentException e) {
             log.error("AES decryption failed: invalid Base64 ciphertext", e);
-            throw new CryptoException("Invalid Base64 ciphertext format", e);
+            throw new CryptoException(EncryptionConstants.ERR_INVALID_BASE64_CIPHERTEXT, e);
         }
     }
 
@@ -169,16 +169,16 @@ public class EncryptionService {
      */
     public String encryptRSA(String data) {
         try {
-            log.debug("Encrypting data with RSA (data length: {})", data != null ? data.length() : 0);
+            log.debug(EncryptionConstants.LOG_ENCRYPTING_DATA_RSA, data != null ? data.length() : 0);
             String encrypted = RsaUtil.encrypt(data, rsaPublicKey);
-            log.debug("RSA encryption completed successfully");
+            log.debug(EncryptionConstants.LOG_RSA_ENCRYPTION_COMPLETED);
             return encrypted;
         } catch (CryptoException e) {
             log.error("RSA encryption failed: {}", e.getMessage(), e);
             throw e;
         } catch (IllegalArgumentException e) {
             log.error("RSA encryption failed: invalid input data", e);
-            throw new CryptoException("Invalid input data for RSA encryption", e);
+            throw new CryptoException(EncryptionConstants.ERR_INVALID_INPUT_DATA_RSA, e);
         }
     }
 
@@ -193,16 +193,16 @@ public class EncryptionService {
      */
     public String decryptRSA(String encryptedData) {
         try {
-            log.debug("Decrypting data with RSA (data length: {})", encryptedData != null ? encryptedData.length() : 0);
+            log.debug(EncryptionConstants.LOG_DECRYPTING_DATA_RSA, encryptedData != null ? encryptedData.length() : 0);
             String decrypted = RsaUtil.decrypt(encryptedData, rsaPrivateKey);
-            log.debug("RSA decryption completed successfully");
+            log.debug(EncryptionConstants.LOG_RSA_DECRYPTION_COMPLETED);
             return decrypted;
         } catch (CryptoException e) {
             log.error("RSA decryption failed: {}", e.getMessage(), e);
             throw e;
         } catch (IllegalArgumentException e) {
             log.error("RSA decryption failed: invalid Base64 ciphertext", e);
-            throw new CryptoException("Invalid Base64 ciphertext format", e);
+            throw new CryptoException(EncryptionConstants.ERR_INVALID_BASE64_CIPHERTEXT_RSA, e);
         }
     }
 
@@ -228,22 +228,22 @@ public class EncryptionService {
      */
     private PublicKey parseRSAPublicKey(String base64Key) {
         try {
-            log.debug("Parsing RSA public key from Base64");
+            log.debug(EncryptionConstants.LOG_PARSING_RSA_PUBLIC_KEY);
             byte[] keyBytes = java.util.Base64.getDecoder().decode(base64Key);
             java.security.spec.X509EncodedKeySpec spec = new java.security.spec.X509EncodedKeySpec(keyBytes);
-            java.security.KeyFactory keyFactory = java.security.KeyFactory.getInstance("RSA");
+            java.security.KeyFactory keyFactory = java.security.KeyFactory.getInstance(EncryptionConstants.ALGORITHM_RSA);
             PublicKey publicKey = keyFactory.generatePublic(spec);
-            log.debug("RSA public key parsed successfully");
+            log.debug(EncryptionConstants.LOG_RSA_PUBLIC_KEY_PARSED);
             return publicKey;
         } catch (IllegalArgumentException e) {
             log.error("Failed to parse RSA public key: invalid Base64 format", e);
-            throw new CryptoException("Invalid Base64 format for RSA public key", e);
+            throw new CryptoException(EncryptionConstants.ERR_INVALID_BASE64_RSA_PUBLIC_KEY, e);
         } catch (InvalidKeySpecException e) {
             log.error("Failed to parse RSA public key: invalid key specification", e);
-            throw new CryptoException("Invalid RSA public key specification", e);
+            throw new CryptoException(EncryptionConstants.ERR_INVALID_RSA_PUBLIC_KEY_SPEC, e);
         } catch (NoSuchAlgorithmException e) {
             log.error("Failed to parse RSA public key: RSA algorithm not supported", e);
-            throw new CryptoException("RSA algorithm not supported by JVM", e);
+            throw new CryptoException(EncryptionConstants.ERR_RSA_ALGORITHM_NOT_SUPPORTED, e);
         }
     }
 
@@ -256,22 +256,22 @@ public class EncryptionService {
      */
     private PrivateKey parseRSAPrivateKey(String base64Key) {
         try {
-            log.debug("Parsing RSA private key from Base64");
+            log.debug(EncryptionConstants.LOG_PARSING_RSA_PRIVATE_KEY);
             byte[] keyBytes = java.util.Base64.getDecoder().decode(base64Key);
             java.security.spec.PKCS8EncodedKeySpec spec = new java.security.spec.PKCS8EncodedKeySpec(keyBytes);
-            java.security.KeyFactory keyFactory = java.security.KeyFactory.getInstance("RSA");
+            java.security.KeyFactory keyFactory = java.security.KeyFactory.getInstance(EncryptionConstants.ALGORITHM_RSA);
             PrivateKey privateKey = keyFactory.generatePrivate(spec);
-            log.debug("RSA private key parsed successfully");
+            log.debug(EncryptionConstants.LOG_RSA_PRIVATE_KEY_PARSED);
             return privateKey;
         } catch (IllegalArgumentException e) {
             log.error("Failed to parse RSA private key: invalid Base64 format", e);
-            throw new CryptoException("Invalid Base64 format for RSA private key", e);
+            throw new CryptoException(EncryptionConstants.ERR_INVALID_BASE64_RSA_PRIVATE_KEY, e);
         } catch (InvalidKeySpecException e) {
             log.error("Failed to parse RSA private key: invalid key specification", e);
-            throw new CryptoException("Invalid RSA private key specification", e);
+            throw new CryptoException(EncryptionConstants.ERR_INVALID_RSA_PRIVATE_KEY_SPEC, e);
         } catch (NoSuchAlgorithmException e) {
             log.error("Failed to parse RSA private key: RSA algorithm not supported", e);
-            throw new CryptoException("RSA algorithm not supported by JVM", e);
+            throw new CryptoException(EncryptionConstants.ERR_RSA_ALGORITHM_NOT_SUPPORTED, e);
         }
     }
 
@@ -285,13 +285,13 @@ public class EncryptionService {
      */
     private KeyPair generateTemporaryRSAKeys() {
         try {
-            log.warn("Generating temporary RSA key pair (2048-bit)");
+            log.warn(EncryptionConstants.LOG_GENERATING_TEMP_RSA_KEYS);
             KeyPair keyPair = RsaUtil.generateKeyPair();
-            log.warn("Temporary RSA key pair generated successfully");
+            log.warn(EncryptionConstants.LOG_TEMP_RSA_KEYS_GENERATED);
             return keyPair;
         } catch (CryptoException e) {
             log.error("Failed to generate temporary RSA keys: {}", e.getMessage(), e);
-            throw new CryptoException("Failed to generate temporary RSA keys", e);
+            throw new CryptoException(EncryptionConstants.ERR_FAILED_TO_GENERATE_TEMP_RSA_KEYS, e);
         }
     }
 }

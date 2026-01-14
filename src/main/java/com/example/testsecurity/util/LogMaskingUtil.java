@@ -1,5 +1,7 @@
 package com.example.testsecurity.util;
 
+import com.example.testsecurity.constants.LogMaskingConstants;
+
 /**
  * Utility class để che (mask) thông tin nhạy cảm trong logs.
  * <p>
@@ -22,11 +24,6 @@ package com.example.testsecurity.util;
 public final class LogMaskingUtil {
 
     /**
-     * Ký tự dùng để che thông tin nhạy cảm
-     */
-    private static final String MASK_CHAR = "?";
-
-    /**
      * Private constructor để ngăn instantiation
      */
     private LogMaskingUtil() {
@@ -43,9 +40,9 @@ public final class LogMaskingUtil {
      */
     public static String maskTransactionId(String transactionId) {
         if (transactionId == null || transactionId.isEmpty()) {
-            return "?";
+            return LogMaskingConstants.DEFAULT_MASK_VALUE;
         }
-        return MASK_CHAR.repeat(transactionId.length());
+        return LogMaskingConstants.MASK_CHAR.repeat(transactionId.length());
     }
 
     /**
@@ -61,9 +58,9 @@ public final class LogMaskingUtil {
      */
     public static String maskAccount(String account) {
         if (account == null || account.isEmpty()) {
-            return "?";
+            return LogMaskingConstants.DEFAULT_MASK_VALUE;
         }
-        return MASK_CHAR.repeat(account.length());
+        return LogMaskingConstants.MASK_CHAR.repeat(account.length());
     }
 
     /**
@@ -76,9 +73,9 @@ public final class LogMaskingUtil {
      */
     public static String maskAmount(String amount) {
         if (amount == null || amount.isEmpty()) {
-            return "?";
+            return LogMaskingConstants.DEFAULT_MASK_VALUE;
         }
-        return MASK_CHAR.repeat(amount.length());
+        return LogMaskingConstants.MASK_CHAR.repeat(amount.length());
     }
 
     /**
@@ -91,9 +88,9 @@ public final class LogMaskingUtil {
      */
     public static String maskTime(String time) {
         if (time == null || time.isEmpty()) {
-            return "?";
+            return LogMaskingConstants.DEFAULT_MASK_VALUE;
         }
-        return MASK_CHAR.repeat(time.length());
+        return LogMaskingConstants.MASK_CHAR.repeat(time.length());
     }
 
     /**
@@ -119,19 +116,19 @@ public final class LogMaskingUtil {
         String masked = message;
 
         // Pattern: transactionId=value hoặc transactionId:value
-        masked = masked.replaceAll("(?i)transactionId[=:]\\s*([^,\\s}]+)", "transactionId=?");
+        masked = masked.replaceAll(LogMaskingConstants.PATTERN_TRANSACTION_ID, LogMaskingConstants.REPLACEMENT_TRANSACTION_ID);
 
         // Pattern: account=value hoặc account:value
-        masked = masked.replaceAll("(?i)account[=:]\\s*([^,\\s}]+)", "account=?");
+        masked = masked.replaceAll(LogMaskingConstants.PATTERN_ACCOUNT, LogMaskingConstants.REPLACEMENT_ACCOUNT);
 
         // Pattern: inDebt=value hoặc inDebt:value
-        masked = masked.replaceAll("(?i)inDebt[=:]\\s*([^,\\s}]+)", "inDebt=?");
+        masked = masked.replaceAll(LogMaskingConstants.PATTERN_IN_DEBT, LogMaskingConstants.REPLACEMENT_IN_DEBT);
 
         // Pattern: have=value hoặc have:value
-        masked = masked.replaceAll("(?i)have[=:]\\s*([^,\\s}]+)", "have=?");
+        masked = masked.replaceAll(LogMaskingConstants.PATTERN_HAVE, LogMaskingConstants.REPLACEMENT_HAVE);
 
         // Pattern: time=value hoặc time:value
-        masked = masked.replaceAll("(?i)time[=:]\\s*([^,\\s}]+)", "time=?");
+        masked = masked.replaceAll(LogMaskingConstants.PATTERN_TIME, LogMaskingConstants.REPLACEMENT_TIME);
 
         return masked;
     }

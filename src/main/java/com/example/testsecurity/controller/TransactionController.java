@@ -1,5 +1,7 @@
 package com.example.testsecurity.controller;
 
+import com.example.testsecurity.constants.DateTimeConstants;
+import com.example.testsecurity.constants.TransactionConstants;
 import com.example.testsecurity.dto.request.TransferRequest;
 import com.example.testsecurity.dto.response.ApiResponse;
 import com.example.testsecurity.dto.response.ErrorResponse;
@@ -26,7 +28,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -66,11 +67,6 @@ public class TransactionController {
      * Service để mã hóa/giải mã dữ liệu
      */
     private final EncryptionService encryptionService;
-
-    /**
-     * DateTimeFormatter để parse time từ String
-     */
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     /**
      * API endpoint để xử lý giao dịch chuyển khoản.
@@ -124,14 +120,14 @@ public class TransactionController {
     })
     public ResponseEntity<ApiResponse<TransferResponse>> transfer(@Valid @RequestBody TransferRequest request) {
         try {
-            log.info("Received transfer request");
+            log.info(TransactionConstants.LOG_RECEIVED_TRANSFER_REQUEST);
 
             // Step 1: RSA decrypt các field từ request
-            String transactionId = decryptField(request.getTransactionId(), "TransactionID");
-            String fromAccount = decryptField(request.getFromAccount(), "FromAccount");
-            String toAccount = decryptField(request.getToAccount(), "ToAccount");
-            BigDecimal amount = parseAmount(decryptField(request.getAmount(), "Amount"));
-            LocalDateTime time = parseTime(decryptField(request.getTime(), "Time"));
+            String transactionId = decryptField(request.getTransactionId(), TransactionConstants.FIELD_TRANSACTION_ID);
+            String fromAccount = decryptField(request.getFromAccount(), TransactionConstants.FIELD_FROM_ACCOUNT);
+            String toAccount = decryptField(request.getToAccount(), TransactionConstants.FIELD_TO_ACCOUNT);
+            BigDecimal amount = parseAmount(decryptField(request.getAmount(), TransactionConstants.FIELD_AMOUNT));
+            LocalDateTime time = parseTime(decryptField(request.getTime(), TransactionConstants.FIELD_TIME));
 
             // Step 2: Gọi service để xử lý nghiệp vụ
             transactionService.processTransfer(transactionId, fromAccount, toAccount, amount, time);
@@ -139,30 +135,30 @@ public class TransactionController {
             // Step 3: Tạo response
             TransferResponse response = TransferResponse.builder()
                     .transactionId(transactionId)
-                    .status("SUCCESS")
-                    .message("Transfer transaction processed successfully")
+                    .status(TransactionConstants.STATUS_SUCCESS)
+                    .message(TransactionConstants.MSG_TRANSFER_SUCCESS)
                     .build();
 
-            log.info("Transfer transaction completed successfully: transactionId={}",
+            log.info(TransactionConstants.LOG_TRANSFER_COMPLETED_SUCCESS,
                     LogMaskingUtil.maskTransactionId(transactionId));
 
             return ResponseEntity.ok(ApiResponse.<TransferResponse>builder()
                     .success(true)
-                    .message("Transfer transaction processed successfully")
+                    .message(TransactionConstants.MSG_TRANSFER_SUCCESS)
                     .data(response)
                     .timestamp(java.time.LocalDateTime.now())
                     .build());
 
         } catch (CryptoException e) {
-            log.error("Crypto error in transfer request: {}", LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
+            log.error(TransactionConstants.LOG_CRYPTO_ERROR_TRANSFER, LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
             return buildErrorResponse(
                     HttpStatus.BAD_REQUEST,
                     ErrorCode.CRYPTO_ERROR,
-                    "Encryption/Decryption error: " + e.getMessage()
+                    TransactionConstants.ERR_CRYPTO_ERROR + ": " + e.getMessage()
             );
 
         } catch (BusinessException e) {
-            log.error("Business error in transfer request: {}", LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
+            log.error(TransactionConstants.LOG_BUSINESS_ERROR_TRANSFER, LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
             return buildErrorResponse(
                     HttpStatus.BAD_REQUEST,
                     e.getErrorCode(),
@@ -170,23 +166,23 @@ public class TransactionController {
             );
 
         } catch (NumberFormatException e) {
-            log.error("Number format error in transfer request: {}", LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
+            log.error(TransactionConstants.LOG_NUMBER_FORMAT_ERROR, LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
             return buildErrorResponse(
                     HttpStatus.BAD_REQUEST,
                     ErrorCode.INVALID_AMOUNT,
-                    "Invalid amount format: " + e.getMessage()
+                    TransactionConstants.ERR_INVALID_AMOUNT_FORMAT + ": " + e.getMessage()
             );
 
         } catch (DateTimeParseException e) {
-            log.error("Date time parse error in transfer request: {}", LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
+            log.error(TransactionConstants.LOG_DATETIME_PARSE_ERROR, LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
             return buildErrorResponse(
                     HttpStatus.BAD_REQUEST,
                     ErrorCode.VALIDATION_ERROR,
-                    "Invalid time format. Expected ISO-8601 format (e.g., 2024-01-15T10:30:00)"
+                    TransactionConstants.ERR_INVALID_TIME_FORMAT
             );
 
         } catch (IllegalArgumentException e) {
-            log.error("Illegal argument error in transfer request: {}", LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
+            log.error(TransactionConstants.LOG_ILLEGAL_ARGUMENT_ERROR, LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
             return buildErrorResponse(
                     HttpStatus.BAD_REQUEST,
                     ErrorCode.VALIDATION_ERROR,
@@ -194,11 +190,11 @@ public class TransactionController {
             );
 
         } catch (NullPointerException e) {
-            log.error("Null pointer error in transfer request: {}", LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
+            log.error(TransactionConstants.LOG_NULL_POINTER_ERROR, LogMaskingUtil.maskSensitiveData(e.getMessage()), e);
             return buildErrorResponse(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     ErrorCode.INTERNAL_SERVER_ERROR,
-                    "Null value detected. Please check your request data."
+                    TransactionConstants.ERR_NULL_VALUE_DETECTED
             );
         }
     }
@@ -237,7 +233,7 @@ public class TransactionController {
             String publicKey = encryptionService.getRSAPublicKeyBase64();
             return ResponseEntity.ok(ApiResponse.<String>builder()
                     .success(true)
-                    .message("RSA Public Key retrieved successfully")
+                    .message(TransactionConstants.MSG_PUBLIC_KEY_RETRIEVED)
                     .data(publicKey)
                     .timestamp(java.time.LocalDateTime.now())
                     .build());
@@ -247,7 +243,7 @@ public class TransactionController {
             return buildStringErrorResponse(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     ErrorCode.CRYPTO_ERROR,
-                    "Failed to retrieve RSA public key: " + e.getMessage()
+                    TransactionConstants.ERR_FAILED_TO_RETRIEVE_PUBLIC_KEY + ": " + e.getMessage()
             );
 
         } catch (IllegalStateException e) {
@@ -255,7 +251,7 @@ public class TransactionController {
             return buildStringErrorResponse(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     ErrorCode.INTERNAL_SERVER_ERROR,
-                    "Encryption service is not properly initialized"
+                    TransactionConstants.ERR_ENCRYPTION_SERVICE_NOT_INITIALIZED
             );
 
         } catch (NullPointerException e) {
@@ -263,7 +259,7 @@ public class TransactionController {
             return buildStringErrorResponse(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     ErrorCode.INTERNAL_SERVER_ERROR,
-                    "Encryption service returned null public key"
+                    TransactionConstants.ERR_NULL_PUBLIC_KEY
             );
         }
     }
@@ -285,7 +281,7 @@ public class TransactionController {
         try {
             return encryptionService.decryptRSA(encryptedField);
         } catch (CryptoException e) {
-            log.error("Failed to decrypt {}: {}", fieldName, e.getMessage(), e);
+            log.error(TransactionConstants.LOG_FAILED_TO_DECRYPT_FIELD, fieldName, e.getMessage(), e);
             throw new CryptoException("Failed to decrypt " + fieldName + ": " + e.getMessage(), e);
         }
     }
@@ -300,18 +296,18 @@ public class TransactionController {
      */
     private BigDecimal parseAmount(String amountString) {
         if (amountString == null || amountString.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_AMOUNT, "Amount is required");
+            throw new BusinessException(ErrorCode.INVALID_AMOUNT, TransactionConstants.ERR_AMOUNT_REQUIRED);
         }
 
         try {
             BigDecimal amount = new BigDecimal(amountString);
             if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new BusinessException(ErrorCode.INVALID_AMOUNT, "Amount must be greater than 0");
+                throw new BusinessException(ErrorCode.INVALID_AMOUNT, TransactionConstants.ERR_AMOUNT_MUST_BE_GREATER_THAN_ZERO);
             }
             return amount;
         } catch (NumberFormatException e) {
-            log.error("Failed to parse amount: {}", LogMaskingUtil.maskAmount(amountString), e);
-            throw new NumberFormatException("Invalid amount format: " + amountString);
+            log.error(TransactionConstants.LOG_FAILED_TO_PARSE_AMOUNT, LogMaskingUtil.maskAmount(amountString), e);
+            throw new NumberFormatException(TransactionConstants.ERR_INVALID_AMOUNT_FORMAT + ": " + amountString);
         }
     }
 
@@ -325,14 +321,14 @@ public class TransactionController {
      */
     private LocalDateTime parseTime(String timeString) {
         if (timeString == null || timeString.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Time is required");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_TIME_REQUIRED);
         }
 
         try {
-            return LocalDateTime.parse(timeString, TIME_FORMATTER);
+            return LocalDateTime.parse(timeString, DateTimeConstants.ISO_LOCAL_DATE_TIME_FORMATTER);
         } catch (DateTimeParseException e) {
-            log.error("Failed to parse time: {}", LogMaskingUtil.maskTime(timeString), e);
-            throw new DateTimeParseException("Invalid time format. Expected ISO-8601 format (e.g., 2024-01-15T10:30:00)", timeString, 0);
+            log.error(TransactionConstants.LOG_FAILED_TO_PARSE_TIME, LogMaskingUtil.maskTime(timeString), e);
+            throw new DateTimeParseException(TransactionConstants.ERR_INVALID_TIME_FORMAT, timeString, 0);
         }
     }
 
@@ -406,7 +402,7 @@ public class TransactionController {
 
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .errorCode(ErrorCode.VALIDATION_ERROR)
-                .message("Validation failed")
+                .message(TransactionConstants.MSG_VALIDATION_FAILED)
                 .details(errors)
                 .build();
 
@@ -415,7 +411,7 @@ public class TransactionController {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.<ErrorResponse>builder()
                         .success(false)
-                        .message("Validation failed")
+                        .message(TransactionConstants.MSG_VALIDATION_FAILED)
                         .data(errorResponse)
                         .timestamp(java.time.LocalDateTime.now())
                         .build());

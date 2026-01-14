@@ -1,5 +1,7 @@
 package com.example.testsecurity.service.impl;
 
+import com.example.testsecurity.constants.LogMaskingConstants;
+import com.example.testsecurity.constants.TransactionConstants;
 import com.example.testsecurity.entity.TransactionHistory;
 import com.example.testsecurity.exception.BusinessException;
 import com.example.testsecurity.exception.CryptoException;
@@ -15,8 +17,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 
 /**
  * Implementation của TransactionService.
@@ -43,11 +43,6 @@ public class TransactionServiceImpl implements TransactionService {
      * Service để mã hóa/giải mã dữ liệu
      */
     private final EncryptionService encryptionService;
-
-    /**
-     * DateTimeFormatter để parse time từ String
-     */
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     /**
      * Xử lý giao dịch chuyển khoản.
@@ -83,7 +78,7 @@ public class TransactionServiceImpl implements TransactionService {
     public void processTransfer(String transactionId, String fromAccount, String toAccount, BigDecimal amount, LocalDateTime time) {
         try {
             // Log với masked data (che thông tin nhạy cảm)
-            log.info("Processing transfer transaction: transactionId={}, fromAccount={}, toAccount={}, amount={}, time={}",
+            log.info(TransactionConstants.LOG_PROCESSING_TRANSFER,
                     LogMaskingUtil.maskTransactionId(transactionId),
                     LogMaskingUtil.maskAccount(fromAccount),
                     LogMaskingUtil.maskAccount(toAccount),
@@ -103,7 +98,7 @@ public class TransactionServiceImpl implements TransactionService {
             createDebitRecord(transactionId, fromAccount, amount, time);
             createCreditRecord(transactionId, toAccount, amount, time);
 
-            log.info("Transfer transaction processed successfully: transactionId={}",
+            log.info(TransactionConstants.LOG_TRANSFER_PROCESSED_SUCCESS,
                     LogMaskingUtil.maskTransactionId(transactionId));
 
         } catch (BusinessException | CryptoException e) {
@@ -112,18 +107,18 @@ public class TransactionServiceImpl implements TransactionService {
 
         } catch (Exception e) {
             // Log exception với masked data
-            log.error("Unexpected error processing transfer transaction: transactionId={}, fromAccount={}, toAccount={}, amount={}, time={}",
+            log.error(TransactionConstants.LOG_UNEXPECTED_ERROR_PROCESSING,
                     LogMaskingUtil.maskTransactionId(transactionId),
                     LogMaskingUtil.maskAccount(fromAccount),
                     LogMaskingUtil.maskAccount(toAccount),
-                    LogMaskingUtil.maskAmount(amount != null ? amount.toString() : "?"),
-                    LogMaskingUtil.maskTime(time != null ? time.toString() : "?"),
+                    LogMaskingUtil.maskAmount(amount != null ? amount.toString() : LogMaskingConstants.DEFAULT_MASK_VALUE),
+                    LogMaskingUtil.maskTime(time != null ? time.toString() : LogMaskingConstants.DEFAULT_MASK_VALUE),
                     e);
 
             // Wrap và throw BusinessException
             throw new BusinessException(
                     ErrorCode.INTERNAL_SERVER_ERROR,
-                    "An unexpected error occurred while processing transfer transaction",
+                    TransactionConstants.ERR_UNEXPECTED_ERROR_PROCESSING_TRANSFER,
                     e
             );
         }
@@ -141,27 +136,27 @@ public class TransactionServiceImpl implements TransactionService {
      */
     private void validateInput(String transactionId, String fromAccount, String toAccount, BigDecimal amount, LocalDateTime time) {
         if (transactionId == null || transactionId.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Transaction ID is required");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_TRANSACTION_ID_REQUIRED);
         }
 
         if (fromAccount == null || fromAccount.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "From account is required");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_FROM_ACCOUNT_REQUIRED);
         }
 
         if (toAccount == null || toAccount.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "To account is required");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_TO_ACCOUNT_REQUIRED);
         }
 
         if (fromAccount.equals(toAccount)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "From account and To account cannot be the same");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_ACCOUNTS_CANNOT_BE_SAME);
         }
 
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException(ErrorCode.INVALID_AMOUNT, "Amount must be greater than 0");
+            throw new BusinessException(ErrorCode.INVALID_AMOUNT, TransactionConstants.ERR_AMOUNT_MUST_BE_GREATER_THAN_ZERO);
         }
 
         if (time == null) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Time is required");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_TIME_REQUIRED);
         }
     }
 
@@ -176,11 +171,11 @@ public class TransactionServiceImpl implements TransactionService {
     private void checkDuplicateTransactionId(String transactionId) {
         boolean exists = repository.existsByTransactionId(transactionId);
         if (exists) {
-            log.warn("Duplicate transaction ID detected: transactionId={}",
+            log.warn(TransactionConstants.LOG_DUPLICATE_TRANSACTION_ID,
                     LogMaskingUtil.maskTransactionId(transactionId));
             throw new BusinessException(
                     ErrorCode.DUPLICATE_TRANSACTION_ID,
-                    "Transaction ID already exists"
+                    TransactionConstants.ERR_TRANSACTION_ID_ALREADY_EXISTS
             );
         }
     }
@@ -211,7 +206,7 @@ public class TransactionServiceImpl implements TransactionService {
         // - Check transaction limits
 
         // Placeholder: Basic validation
-        log.debug("Validating business rules for transfer: fromAccount={}, toAccount={}, amount={}",
+        log.debug(TransactionConstants.LOG_VALIDATING_BUSINESS_RULES,
                 LogMaskingUtil.maskAccount(fromAccount),
                 LogMaskingUtil.maskAccount(toAccount),
                 LogMaskingUtil.maskAmount(amount.toString()));
@@ -242,18 +237,18 @@ public class TransactionServiceImpl implements TransactionService {
 
             repository.save(debitRecord);
 
-            log.debug("Debit record created: transactionId={}, account={}",
+            log.debug(TransactionConstants.LOG_DEBIT_RECORD_CREATED,
                     LogMaskingUtil.maskTransactionId(transactionId),
                     LogMaskingUtil.maskAccount(account));
 
         } catch (CryptoException e) {
-            log.error("Failed to encrypt account for debit record: transactionId={}, account={}",
+            log.error(TransactionConstants.LOG_FAILED_TO_ENCRYPT_ACCOUNT_DEBIT,
                     LogMaskingUtil.maskTransactionId(transactionId),
                     LogMaskingUtil.maskAccount(account),
                     e);
             throw e;
         } catch (Exception e) {
-            log.error("Failed to create debit record: transactionId={}, account={}, amount={}, time={}",
+            log.error(TransactionConstants.LOG_FAILED_TO_CREATE_DEBIT,
                     LogMaskingUtil.maskTransactionId(transactionId),
                     LogMaskingUtil.maskAccount(account),
                     LogMaskingUtil.maskAmount(amount.toString()),
@@ -261,7 +256,7 @@ public class TransactionServiceImpl implements TransactionService {
                     e);
             throw new BusinessException(
                     ErrorCode.INTERNAL_SERVER_ERROR,
-                    "Failed to create debit record",
+                    TransactionConstants.ERR_FAILED_TO_CREATE_DEBIT_RECORD,
                     e
             );
         }
@@ -292,18 +287,18 @@ public class TransactionServiceImpl implements TransactionService {
 
             repository.save(creditRecord);
 
-            log.debug("Credit record created: transactionId={}, account={}",
+            log.debug(TransactionConstants.LOG_CREDIT_RECORD_CREATED,
                     LogMaskingUtil.maskTransactionId(transactionId),
                     LogMaskingUtil.maskAccount(account));
 
         } catch (CryptoException e) {
-            log.error("Failed to encrypt account for credit record: transactionId={}, account={}",
+            log.error(TransactionConstants.LOG_FAILED_TO_ENCRYPT_ACCOUNT_CREDIT,
                     LogMaskingUtil.maskTransactionId(transactionId),
                     LogMaskingUtil.maskAccount(account),
                     e);
             throw e;
         } catch (Exception e) {
-            log.error("Failed to create credit record: transactionId={}, account={}, amount={}, time={}",
+            log.error(TransactionConstants.LOG_FAILED_TO_CREATE_CREDIT,
                     LogMaskingUtil.maskTransactionId(transactionId),
                     LogMaskingUtil.maskAccount(account),
                     LogMaskingUtil.maskAmount(amount.toString()),
@@ -311,7 +306,7 @@ public class TransactionServiceImpl implements TransactionService {
                     e);
             throw new BusinessException(
                     ErrorCode.INTERNAL_SERVER_ERROR,
-                    "Failed to create credit record",
+                    TransactionConstants.ERR_FAILED_TO_CREATE_CREDIT_RECORD,
                     e
             );
         }
