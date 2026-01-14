@@ -129,6 +129,9 @@ public class TransactionController {
             BigDecimal amount = parseAmount(decryptField(request.getAmount(), TransactionConstants.FIELD_AMOUNT));
             LocalDateTime time = parseTime(decryptField(request.getTime(), TransactionConstants.FIELD_TIME));
 
+            // Step 2: Validate decrypted/plaintext inputs (không validate trong service)
+            validateDecryptedInputs(transactionId, fromAccount, toAccount);
+
             // Step 2: Gọi service để xử lý nghiệp vụ
             transactionService.processTransfer(transactionId, fromAccount, toAccount, amount, time);
 
@@ -275,7 +278,9 @@ public class TransactionController {
      */
     private String decryptField(String encryptedField, String fieldName) {
         if (encryptedField == null || encryptedField.trim().isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " is required");
+            String normalized = normalizeFieldName(fieldName);
+            log.warn("Validation error: {} rỗng (encrypted field)", normalized);
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, normalized + " rỗng");
         }
 
         try {
@@ -296,13 +301,15 @@ public class TransactionController {
      */
     private BigDecimal parseAmount(String amountString) {
         if (amountString == null || amountString.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.INVALID_AMOUNT, TransactionConstants.ERR_AMOUNT_REQUIRED);
+            log.warn("Validation error: amount rỗng (decrypted plaintext)");
+            throw new BusinessException(ErrorCode.INVALID_AMOUNT, "amount rỗng");
         }
 
         try {
             BigDecimal amount = new BigDecimal(amountString);
             if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new BusinessException(ErrorCode.INVALID_AMOUNT, TransactionConstants.ERR_AMOUNT_MUST_BE_GREATER_THAN_ZERO);
+                log.warn("Validation error: amount phải > 0");
+                throw new BusinessException(ErrorCode.INVALID_AMOUNT, "amount phải > 0");
             }
             return amount;
         } catch (NumberFormatException e) {
@@ -321,7 +328,8 @@ public class TransactionController {
      */
     private LocalDateTime parseTime(String timeString) {
         if (timeString == null || timeString.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_TIME_REQUIRED);
+            log.warn("Validation error: time rỗng (decrypted plaintext)");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "time rỗng");
         }
 
         try {
@@ -330,6 +338,35 @@ public class TransactionController {
             log.error(TransactionConstants.LOG_FAILED_TO_PARSE_TIME, LogMaskingUtil.maskTime(timeString), e);
             throw new DateTimeParseException(TransactionConstants.ERR_INVALID_TIME_FORMAT, timeString, 0);
         }
+    }
+
+    private void validateDecryptedInputs(String transactionId, String fromAccount, String toAccount) {
+        if (transactionId == null || transactionId.trim().isEmpty()) {
+            log.warn("Validation error: transactionId rỗng (decrypted plaintext)");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "transactionId rỗng");
+        }
+        if (fromAccount == null || fromAccount.trim().isEmpty()) {
+            log.warn("Validation error: fromAccount rỗng (decrypted plaintext)");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "fromAccount rỗng");
+        }
+        if (toAccount == null || toAccount.trim().isEmpty()) {
+            log.warn("Validation error: toAccount rỗng (decrypted plaintext)");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, "toAccount rỗng");
+        }
+        if (fromAccount.equals(toAccount)) {
+            log.warn("Validation error: fromAccount và toAccount không được giống nhau");
+            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_ACCOUNTS_CANNOT_BE_SAME);
+        }
+    }
+
+    private String normalizeFieldName(String fieldName) {
+        // Convert constant field names (TransactionID/FromAccount/...) to request field names
+        if (TransactionConstants.FIELD_TRANSACTION_ID.equals(fieldName)) return "transactionId";
+        if (TransactionConstants.FIELD_FROM_ACCOUNT.equals(fieldName)) return "fromAccount";
+        if (TransactionConstants.FIELD_TO_ACCOUNT.equals(fieldName)) return "toAccount";
+        if (TransactionConstants.FIELD_AMOUNT.equals(fieldName)) return "amount";
+        if (TransactionConstants.FIELD_TIME.equals(fieldName)) return "time";
+        return fieldName;
     }
 
     /**

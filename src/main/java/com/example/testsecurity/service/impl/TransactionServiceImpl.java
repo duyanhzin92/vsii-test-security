@@ -82,19 +82,16 @@ public class TransactionServiceImpl implements TransactionService {
                     LogMaskingUtil.maskTransactionId(transactionId),
                     LogMaskingUtil.maskAccount(fromAccount),
                     LogMaskingUtil.maskAccount(toAccount),
-                    LogMaskingUtil.maskAmount(amount.toString()),
-                    LogMaskingUtil.maskTime(time.toString()));
+                    LogMaskingUtil.maskAmount(amount != null ? amount.toString() : LogMaskingConstants.DEFAULT_MASK_VALUE),
+                    LogMaskingUtil.maskTime(time != null ? time.toString() : LogMaskingConstants.DEFAULT_MASK_VALUE));
 
-            // Step 1: Validate input
-            validateInput(transactionId, fromAccount, toAccount, amount, time);
-
-            // Step 2: Check duplicate transactionId (idempotency)
+            // Step 1: Check duplicate transactionId (idempotency)
             checkDuplicateTransactionId(transactionId);
 
-            // Step 3: Check business rules (số dư, tài khoản tồn tại, ...)
+            // Step 2: Check business rules (số dư, tài khoản tồn tại, ...)
             validateBusinessRules(fromAccount, toAccount, amount);
 
-            // Step 4: Create 2 transaction records (NỢ và CÓ)
+            // Step 3: Create 2 transaction records (NỢ và CÓ)
             createDebitRecord(transactionId, fromAccount, amount, time);
             createCreditRecord(transactionId, toAccount, amount, time);
 
@@ -121,42 +118,6 @@ public class TransactionServiceImpl implements TransactionService {
                     TransactionConstants.ERR_UNEXPECTED_ERROR_PROCESSING_TRANSFER,
                     e
             );
-        }
-    }
-
-    /**
-     * Validate input data
-     *
-     * @param transactionId Mã giao dịch
-     * @param fromAccount   Số tài khoản nguồn
-     * @param toAccount     Số tài khoản đích
-     * @param amount        Số tiền
-     * @param time          Thời gian
-     * @throws BusinessException nếu validation failed
-     */
-    private void validateInput(String transactionId, String fromAccount, String toAccount, BigDecimal amount, LocalDateTime time) {
-        if (transactionId == null || transactionId.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_TRANSACTION_ID_REQUIRED);
-        }
-
-        if (fromAccount == null || fromAccount.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_FROM_ACCOUNT_REQUIRED);
-        }
-
-        if (toAccount == null || toAccount.trim().isEmpty()) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_TO_ACCOUNT_REQUIRED);
-        }
-
-        if (fromAccount.equals(toAccount)) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_ACCOUNTS_CANNOT_BE_SAME);
-        }
-
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException(ErrorCode.INVALID_AMOUNT, TransactionConstants.ERR_AMOUNT_MUST_BE_GREATER_THAN_ZERO);
-        }
-
-        if (time == null) {
-            throw new BusinessException(ErrorCode.VALIDATION_ERROR, TransactionConstants.ERR_TIME_REQUIRED);
         }
     }
 

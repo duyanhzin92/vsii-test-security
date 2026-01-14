@@ -91,27 +91,27 @@ public final class TransactionConstants {
     /**
      * Error message: Transaction ID is required
      */
-    public static final String ERR_TRANSACTION_ID_REQUIRED = "Transaction ID is required";
+    public static final String ERR_TRANSACTION_ID_REQUIRED = "transactionId rỗng";
 
     /**
      * Error message: From account is required
      */
-    public static final String ERR_FROM_ACCOUNT_REQUIRED = "From account is required";
+    public static final String ERR_FROM_ACCOUNT_REQUIRED = "fromAccount rỗng";
 
     /**
      * Error message: To account is required
      */
-    public static final String ERR_TO_ACCOUNT_REQUIRED = "To account is required";
+    public static final String ERR_TO_ACCOUNT_REQUIRED = "toAccount rỗng";
 
     /**
      * Error message: Amount is required
      */
-    public static final String ERR_AMOUNT_REQUIRED = "Amount is required";
+    public static final String ERR_AMOUNT_REQUIRED = "amount rỗng";
 
     /**
      * Error message: Time is required
      */
-    public static final String ERR_TIME_REQUIRED = "Time is required";
+    public static final String ERR_TIME_REQUIRED = "time rỗng";
 
     /**
      * Error message: From account and To account cannot be the same
@@ -121,7 +121,7 @@ public final class TransactionConstants {
     /**
      * Error message: Amount must be greater than 0
      */
-    public static final String ERR_AMOUNT_MUST_BE_GREATER_THAN_ZERO = "Amount must be greater than 0";
+    public static final String ERR_AMOUNT_MUST_BE_GREATER_THAN_ZERO = "amount phải > 0";
 
     /**
      * Error message: Transaction ID already exists
