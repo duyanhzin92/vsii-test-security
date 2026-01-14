@@ -104,56 +104,6 @@ public class EncryptionService {
         log.info(EncryptionConstants.LOG_ENCRYPTION_SERVICE_INITIALIZED);
     }
 
-    // ============ AES Methods (for database encryption) ============
-
-    /**
-     * Mã hóa Account Number bằng AES-256/GCM trước khi lưu vào database
-     * <p>
-     * Dùng cho: Account Number field trong TransactionHistory entity
-     *
-     * @param account Account Number (plaintext)
-     * @return Account Number đã mã hóa (Base64 encoded)
-     * @throws CryptoException nếu có lỗi trong quá trình mã hóa
-     */
-    public String encryptAccountForDatabase(String account) {
-        try {
-            log.debug(EncryptionConstants.LOG_ENCRYPTING_ACCOUNT_FOR_DB, account != null ? account.length() : 0);
-            String encrypted = AesUtil.encrypt(account, aesKey);
-            log.debug(EncryptionConstants.LOG_ACCOUNT_ENCRYPTED_FOR_DB);
-            return encrypted;
-        } catch (CryptoException e) {
-            log.error("AES encryption failed for account: {}", e.getMessage(), e);
-            throw e;
-        } catch (IllegalArgumentException e) {
-            log.error("AES encryption failed: invalid account format", e);
-            throw new CryptoException(EncryptionConstants.ERR_INVALID_ACCOUNT_FORMAT_AES, e);
-        }
-    }
-
-    /**
-     * Giải mã Account Number từ database
-     * <p>
-     * Dùng khi cần đọc Account Number từ database (ví dụ: để hiển thị hoặc xử lý nghiệp vụ)
-     *
-     * @param encryptedAccount Account Number đã mã hóa (Base64 encoded)
-     * @return Account Number gốc (plaintext)
-     * @throws CryptoException nếu có lỗi trong quá trình giải mã (key sai, data bị tamper, ...)
-     */
-    public String decryptAccountFromDatabase(String encryptedAccount) {
-        try {
-            log.debug(EncryptionConstants.LOG_DECRYPTING_ACCOUNT_FROM_DB, encryptedAccount != null ? encryptedAccount.length() : 0);
-            String decrypted = AesUtil.decrypt(encryptedAccount, aesKey);
-            log.debug(EncryptionConstants.LOG_ACCOUNT_DECRYPTED_FROM_DB);
-            return decrypted;
-        } catch (CryptoException e) {
-            log.error("AES decryption failed for account: {}", e.getMessage(), e);
-            throw e;
-        } catch (IllegalArgumentException e) {
-            log.error("AES decryption failed: invalid Base64 ciphertext", e);
-            throw new CryptoException(EncryptionConstants.ERR_INVALID_BASE64_CIPHERTEXT, e);
-        }
-    }
-
     // ============ RSA Methods (for service communication) ============
 
     /**

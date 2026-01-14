@@ -40,11 +40,6 @@ public class TransactionServiceImpl implements TransactionService {
     private final TransactionHistoryRepository repository;
 
     /**
-     * Service để mã hóa/giải mã dữ liệu
-     */
-    private final EncryptionService encryptionService;
-
-    /**
      * Xử lý giao dịch chuyển khoản.
      * <p>
      * Flow chi tiết:
@@ -185,12 +180,9 @@ public class TransactionServiceImpl implements TransactionService {
      */
     private void createDebitRecord(String transactionId, String account, BigDecimal amount, LocalDateTime time) {
         try {
-            // AES encrypt Account trước khi lưu vào database
-            String encryptedAccount = encryptionService.encryptAccountForDatabase(account);
-
             TransactionHistory debitRecord = TransactionHistory.builder()
                     .transactionId(transactionId)
-                    .account(encryptedAccount) // Đã được AES encrypt
+                    .account(account)          // Sẽ được AES encrypt bởi AccountAesConverter
                     .inDebt(amount)           // Số tiền nợ
                     .have(BigDecimal.ZERO)    // Không có số tiền có
                     .time(time)
@@ -235,12 +227,9 @@ public class TransactionServiceImpl implements TransactionService {
      */
     private void createCreditRecord(String transactionId, String account, BigDecimal amount, LocalDateTime time) {
         try {
-            // AES encrypt Account trước khi lưu vào database
-            String encryptedAccount = encryptionService.encryptAccountForDatabase(account);
-
             TransactionHistory creditRecord = TransactionHistory.builder()
                     .transactionId(transactionId)
-                    .account(encryptedAccount) // Đã được AES encrypt
+                    .account(account)          // Sẽ được AES encrypt bởi AccountAesConverter
                     .inDebt(BigDecimal.ZERO)  // Không có số tiền nợ
                     .have(amount)             // Số tiền có
                     .time(time)

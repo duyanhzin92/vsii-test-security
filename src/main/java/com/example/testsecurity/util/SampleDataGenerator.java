@@ -64,7 +64,10 @@ public class SampleDataGenerator implements CommandLineRunner {
             log.info("Encrypting account numbers...");
             String[] encryptedAccounts = new String[accounts.length];
             for (int i = 0; i < accounts.length; i++) {
-                encryptedAccounts[i] = encryptionService.encryptAccountForDatabase(accounts[i]);
+                encryptedAccounts[i] = com.example.testsecurity.util.AesUtil.encrypt(
+                        accounts[i],
+                        com.example.testsecurity.util.AesUtil.keyFromString(aesKeyBase64)
+                );
                 log.info("  Account {} encrypted: {}...", accounts[i], encryptedAccounts[i].substring(0, Math.min(50, encryptedAccounts[i].length())));
             }
 

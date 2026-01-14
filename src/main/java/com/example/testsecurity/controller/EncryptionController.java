@@ -41,6 +41,9 @@ public class EncryptionController {
 
     private final EncryptionService encryptionService;
 
+    @org.springframework.beans.factory.annotation.Value("${encryption.aes.key}")
+    private String aesKeyBase64;
+
     /**
      * Mã hóa dữ liệu bằng RSA Public Key
      * <p>
@@ -180,7 +183,10 @@ public class EncryptionController {
     })
     public ResponseEntity<ApiResponse<EncryptResponse>> encryptAccount(@Valid @RequestBody EncryptRequest request) {
         try {
-            String encrypted = encryptionService.encryptAccountForDatabase(request.getPlainText());
+            String encrypted = com.example.testsecurity.util.AesUtil.encrypt(
+                    request.getPlainText(),
+                    com.example.testsecurity.util.AesUtil.keyFromString(aesKeyBase64)
+            );
             log.info("AES encryption successful for account (length: {})", request.getPlainText().length());
 
             return ResponseEntity.ok(ApiResponse.<EncryptResponse>builder()
@@ -228,7 +234,10 @@ public class EncryptionController {
     })
     public ResponseEntity<ApiResponse<DecryptResponse>> decryptAccount(@Valid @RequestBody DecryptRequest request) {
         try {
-            String decrypted = encryptionService.decryptAccountFromDatabase(request.getCipherText());
+            String decrypted = com.example.testsecurity.util.AesUtil.decrypt(
+                    request.getCipherText(),
+                    com.example.testsecurity.util.AesUtil.keyFromString(aesKeyBase64)
+            );
             log.info("AES decryption successful for account");
 
             return ResponseEntity.ok(ApiResponse.<DecryptResponse>builder()

@@ -1,5 +1,6 @@
 package com.example.testsecurity.entity;
 
+import com.example.testsecurity.converter.AccountAesConverter;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -70,10 +71,11 @@ public class TransactionHistory {
      * <p>
      * <b>⚠️ QUAN TRỌNG:</b> Field này được mã hóa bằng AES-256/GCM trước khi lưu vào database
      * <p>
-     * Encryption được thực hiện trong Service layer (TransactionService) trước khi save
+     * Encryption được thực hiện tự động bởi JPA AttributeConverter (AccountAesConverter)
      * <p>
      * Format trong database: Base64(IV + Encrypted Account + Auth Tag)
      */
+    @Convert(converter = AccountAesConverter.class)
     @Column(nullable = false, length = 500)
     private String account;
 

@@ -62,7 +62,10 @@ public class DataGenerator {
             // Encrypt accounts
             String[] encryptedAccounts = new String[accounts.length];
             for (int i = 0; i < accounts.length; i++) {
-                encryptedAccounts[i] = encryptionService.encryptAccountForDatabase(accounts[i]);
+                encryptedAccounts[i] = com.example.testsecurity.util.AesUtil.encrypt(
+                        accounts[i],
+                        com.example.testsecurity.util.AesUtil.keyFromString(aesKeyBase64)
+                );
                 log.info("Encrypted account {}: {}", accounts[i], encryptedAccounts[i].substring(0, Math.min(50, encryptedAccounts[i].length())) + "...");
             }
 
