@@ -178,8 +178,67 @@ mvn clean install
 mvn spring-boot:run
 ```
 
+## Generate Sample Data
+
+### Cách 1: Sử dụng SampleDataGenerator (Khuyến nghị)
+
+1. Chạy ứng dụng với argument `--generate-data`:
+   ```bash
+   mvn spring-boot:run -Dspring-boot.run.arguments="--generate-data"
+   ```
+
+2. Copy SQL statements từ console (các Account numbers đã được mã hóa AES)
+
+3. Chạy SQL trong MySQL Workbench
+
+### Cách 2: Sử dụng API để tạo data
+
+Sử dụng Postman hoặc Swagger UI để gọi API `/api/transactions/transfer`
+
+## Hướng dẫn Chạy Dự án
+
+### Bước 1: Cấu hình Database
+
+1. Tạo database:
+```sql
+CREATE DATABASE bankdb;
+```
+
+2. Cấu hình trong `application.yaml`:
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/bankdb
+    username: root
+    password: 123456  # Thay đổi theo cấu hình của bạn
+```
+
+3. Bảng sẽ được tự động tạo khi chạy ứng dụng (do `ddl-auto: update`)
+
+### Bước 2: Build và Chạy
+
+```bash
+# Build project
+mvn clean install
+
+# Chạy ứng dụng
+mvn spring-boot:run
+```
+
+### Bước 3: Generate Sample Data
+
+```bash
+# Chạy với flag --generate-data
+mvn spring-boot:run -Dspring-boot.run.arguments="--generate-data"
+```
+
+### Bước 4: Truy cập Swagger UI
+
+Mở trình duyệt: `http://localhost:8080/swagger-ui.html`
+
 ## Notes
 
 - ⚠️ **Production**: Cần generate keys mới và lưu trữ an toàn (không commit vào git)
 - ⚠️ **Key Management**: Nên sử dụng key management service (AWS KMS, HashiCorp Vault, ...) trong production
 - ⚠️ **Database**: Account field trong database đã được mã hóa, không thể query trực tiếp
+- ⚠️ **Sample Data**: Account numbers trong sample data đã được mã hóa AES, mỗi lần generate sẽ khác nhau (do IV random)
